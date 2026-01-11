@@ -25,11 +25,10 @@ public class ClearDfaCacheTest {
         String complexDataProcessingExpress =
             new String(Files.readAllBytes(getPerfRoot().resolve("complexDataProcessing.ql")));
         Express4Runner runner = new Express4Runner(InitOptions.DEFAULT_OPTIONS);
-        
-        double beforeMemoryUsed = getMemoryUsedMB();
         runner.parseToSyntaxTree(complexDataProcessingExpress);
+        double beforeMemoryUsed = getMemoryUsedMB();
         runner.clearDFACache();
-        Assert.assertTrue(getMemoryUsedMB() <= beforeMemoryUsed + 1);
+        Assert.assertTrue(getMemoryUsedMB() < beforeMemoryUsed / 2);
     }
     
     @Test

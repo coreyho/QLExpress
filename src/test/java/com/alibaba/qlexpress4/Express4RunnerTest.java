@@ -1154,6 +1154,14 @@ public class Express4RunnerTest {
         
         Set<String> outVarNamesEmptyCall = express4Runner.getOutVarNames("hello()");
         Assert.assertEquals(Collections.emptySet(), outVarNamesEmptyCall);
+        
+        // Test function parameters should not be included in outVarNames
+        Set<String> outVarNamesExcludeParams =
+            express4Runner.getOutVarNames("function sub(a, b) {\n" + "    return a-b;\n" + "}\n" + "return sub(x, y);");
+        Set<String> expectOutVarNamesExcludeParams = new HashSet<>();
+        expectOutVarNamesExcludeParams.add("x");
+        expectOutVarNamesExcludeParams.add("y");
+        Assert.assertEquals(expectOutVarNamesExcludeParams, outVarNamesExcludeParams);
     }
     
     @Test
@@ -1168,6 +1176,11 @@ public class Express4RunnerTest {
         Assert.assertEquals(Collections.singletonList("c"),
             flatOutVarAttrs(express4Runner.getOutVarAttrs("java.lang.Math.abs(c)")));
         Assert.assertEquals(Collections.emptyList(), flatOutVarAttrs(express4Runner.getOutVarAttrs("hello()")));
+        
+        // Test function parameters should not be included in outVarAttrs
+        Assert.assertEquals(Arrays.asList("x.prop", "y.value"),
+            flatOutVarAttrs(express4Runner.getOutVarAttrs(
+                "function sub(a, b) {\n" + "    return a.field - b.name;\n" + "}\n" + "return sub(x.prop, y.value);")));
     }
     
     private List<String> flatOutVarAttrs(Set<List<String>> outVarAttrs) {

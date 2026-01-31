@@ -70,6 +70,8 @@ public abstract class ScopeStackVisitor extends QLParserBaseVisitor<Void> {
     @Override
     public Void visitFunctionStatement(QLParser.FunctionStatementContext ctx) {
         ctx.varId().accept(this);
+        
+        push();
         QLParser.FormalOrInferredParameterListContext paramList = ctx.formalOrInferredParameterList();
         if (paramList != null) {
             paramList.accept(this);
@@ -77,10 +79,9 @@ public abstract class ScopeStackVisitor extends QLParserBaseVisitor<Void> {
         
         QLParser.BlockStatementsContext functionBlockStatements = ctx.blockStatements();
         if (functionBlockStatements != null) {
-            push();
             functionBlockStatements.accept(this);
-            pop();
         }
+        pop();
         
         return null;
     }

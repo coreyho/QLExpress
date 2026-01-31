@@ -80,6 +80,18 @@ public class OutVarAttrsVisitor extends ScopeStackVisitor {
     // collect exist variable name
     
     /**
+     * Handle function parameters
+     * @param ctx function parameter
+     * @return null
+     */
+    @Override
+    public Void visitFormalOrInferredParameter(QLParser.FormalOrInferredParameterContext ctx) {
+        QLParser.VarIdContext varIdContext = ctx.varId();
+        getStack().add(varIdContext.getText());
+        return null;
+    }
+    
+    /**
      * @param ctx int a = 10;
      * @return a
      */

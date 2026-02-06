@@ -1,4 +1,3 @@
-// switch as statement
 int day = 3;
 String dayName;
 switch (day) {

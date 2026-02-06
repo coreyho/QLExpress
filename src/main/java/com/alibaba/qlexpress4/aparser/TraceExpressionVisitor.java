@@ -117,28 +117,55 @@ public class TraceExpressionVisitor extends QLParserBaseVisitor<TracePointTree> 
         }
         
         // Visit case bodies for tracing
-        QLParser.SwitchBlockStatementGroupsContext switchBlockContext = ctx.switchBlockStatementGroups();
-        if (switchBlockContext != null) {
-            for (QLParser.SwitchBlockStatementGroupContext group : switchBlockContext.switchBlockStatementGroup()) {
-                // Visit case label expressions
-                if (group.switchLabels() != null) {
-                    for (QLParser.SwitchLabelContext label : group.switchLabels().switchLabel()) {
-                        if (label.expression() != null) {
-                            TracePointTree caseExprTrace = label.expression().accept(this);
-                            if (caseExprTrace != null) {
-                                children.add(caseExprTrace);
+        QLParser.SwitchCaseGroupsContext groupsContext = ctx.switchCaseGroups();
+        if (groupsContext != null) {
+            for (QLParser.SwitchCaseGroupContext group : groupsContext.switchCaseGroup()) {
+                if (group instanceof QLParser.SwitchStatementGroupContext) {
+                    // Traditional switch statement group
+                    QLParser.SwitchStatementGroupContext stmtGroup = (QLParser.SwitchStatementGroupContext)group;
+                    // Visit case label expressions
+                    if (stmtGroup.switchLabels() != null) {
+                        for (QLParser.SwitchLabelContext label : stmtGroup.switchLabels().switchLabel()) {
+                            if (label.expression() != null) {
+                                TracePointTree caseExprTrace = label.expression().accept(this);
+                                if (caseExprTrace != null) {
+                                    children.add(caseExprTrace);
+                                }
                             }
                         }
                     }
+                    // Visit case body statements
+                    if (stmtGroup.blockStatements() != null) {
+                        TraceExpressionVisitor blockVisitor = new TraceExpressionVisitor();
+                        stmtGroup.blockStatements().accept(blockVisitor);
+                        TracePointTree blockTrace = newPoint(TraceType.BLOCK,
+                            blockVisitor.getExpressionTracePoints(),
+                            stmtGroup.blockStatements().getStart());
+                        children.add(blockTrace);
+                    }
                 }
-                // Visit case body statements
-                if (group.blockStatements() != null) {
-                    TraceExpressionVisitor blockVisitor = new TraceExpressionVisitor();
-                    group.blockStatements().accept(blockVisitor);
-                    TracePointTree blockTrace = newPoint(TraceType.BLOCK,
-                        blockVisitor.getExpressionTracePoints(),
-                        group.blockStatements().getStart());
-                    children.add(blockTrace);
+                else if (group instanceof QLParser.SwitchExprGroupContext) {
+                    // Switch expression group
+                    QLParser.SwitchExprGroupContext exprGroup = (QLParser.SwitchExprGroupContext)group;
+                    // Visit case label expressions
+                    if (exprGroup.switchExpressionLabel() != null) {
+                        QLParser.SwitchExpressionLabelContext label = exprGroup.switchExpressionLabel();
+                        if (label.expressionList() != null) {
+                            for (QLParser.ExpressionContext expr : label.expressionList().expression()) {
+                                TracePointTree caseExprTrace = expr.accept(this);
+                                if (caseExprTrace != null) {
+                                    children.add(caseExprTrace);
+                                }
+                            }
+                        }
+                    }
+                    // Visit result expression
+                    if (exprGroup.expression() != null) {
+                        TracePointTree resultTrace = exprGroup.expression().accept(this);
+                        if (resultTrace != null) {
+                            children.add(resultTrace);
+                        }
+                    }
                 }
             }
         }

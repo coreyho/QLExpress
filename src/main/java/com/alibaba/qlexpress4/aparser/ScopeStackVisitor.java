@@ -41,22 +41,43 @@ public abstract class ScopeStackVisitor extends QLParserBaseVisitor<Void> {
         ctx.expression().accept(this);
         
         // Visit switch body with scope
-        QLParser.SwitchBlockStatementGroupsContext switchBlockContext = ctx.switchBlockStatementGroups();
-        if (switchBlockContext != null) {
+        QLParser.SwitchCaseGroupsContext groupsContext = ctx.switchCaseGroups();
+        if (groupsContext != null) {
             push();
             // Visit each case group
-            for (QLParser.SwitchBlockStatementGroupContext group : switchBlockContext.switchBlockStatementGroup()) {
-                // Visit case labels (they contain expressions)
-                if (group.switchLabels() != null) {
-                    for (QLParser.SwitchLabelContext label : group.switchLabels().switchLabel()) {
-                        if (label.expression() != null) {
-                            label.expression().accept(this);
+            for (QLParser.SwitchCaseGroupContext group : groupsContext.switchCaseGroup()) {
+                if (group instanceof QLParser.SwitchStatementGroupContext) {
+                    // Traditional switch statement group
+                    QLParser.SwitchStatementGroupContext stmtGroup = (QLParser.SwitchStatementGroupContext)group;
+                    // Visit case labels (they contain expressions)
+                    if (stmtGroup.switchLabels() != null) {
+                        for (QLParser.SwitchLabelContext label : stmtGroup.switchLabels().switchLabel()) {
+                            if (label.expression() != null) {
+                                label.expression().accept(this);
+                            }
                         }
                     }
+                    // Visit case body
+                    if (stmtGroup.blockStatements() != null) {
+                        stmtGroup.blockStatements().accept(this);
+                    }
                 }
-                // Visit case body
-                if (group.blockStatements() != null) {
-                    group.blockStatements().accept(this);
+                else if (group instanceof QLParser.SwitchExprGroupContext) {
+                    // Switch expression group
+                    QLParser.SwitchExprGroupContext exprGroup = (QLParser.SwitchExprGroupContext)group;
+                    // Visit case labels (they contain expressions)
+                    if (exprGroup.switchExpressionLabel() != null) {
+                        QLParser.SwitchExpressionLabelContext label = exprGroup.switchExpressionLabel();
+                        if (label.expressionList() != null) {
+                            for (QLParser.ExpressionContext expr : label.expressionList().expression()) {
+                                expr.accept(this);
+                            }
+                        }
+                    }
+                    // Visit result expression
+                    if (exprGroup.expression() != null) {
+                        exprGroup.expression().accept(this);
+                    }
                 }
             }
             pop();

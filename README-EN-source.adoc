@@ -866,7 +866,7 @@ include::./src/test/resources/testsuite/independent/doc/for.ql[]
 include::./src/test/resources/testsuite/independent/doc/for_each.ql[]
 ----
 
-==== switch Statement
+==== switch
 
 Supports Java/C-like switch syntax:
 
@@ -874,6 +874,20 @@ Supports Java/C-like switch syntax:
 ----
 include::./src/test/resources/testsuite/independent/doc/switch.ql[]
 ----
+
+When switch is used as an expression, the -> arrow must be used (while the syntax above won't throw an error, the overall expression evaluates to null):
+
+[source,java]
+----
+include::./src/test/resources/testsuite/independent/switch/switch_expression_basic.ql[tag=switchExpression]
+----
+
+Features:
+
+* Uses `->` syntax, each case can return an expression value
+* Supports multiple case values separated by commas (e.g., `case 90, 100 ->`)
+* No fall-through, automatically exits after executing a case
+* Can be used as an expression, assigned to variables or used in other expressions
 
 ==== try-catch
 

@@ -1200,10 +1200,20 @@ public class Express4RunnerTest {
         expectOutVarNamesSwitchNested.add("outerVar");
         expectOutVarNamesSwitchNested.add("innerVar");
         Assert.assertEquals(expectOutVarNamesSwitchNested, outVarNamesSwitchNested);
+        
+        // switch expression
+        Set<String> outVarNamesSwitchExpr =
+            express4Runner.getOutVarNames("int x = 2;\n" + "result = switch (x) {\n" + "  case 1 -> externalVar1 + 10\n"
+                + "  case 2 -> externalVar2 * 2\n" + "  default -> externalVar3\n" + "}");
+        Set<String> expectOutVarNamesSwitchExpr = new HashSet<>();
+        expectOutVarNamesSwitchExpr.add("externalVar1");
+        expectOutVarNamesSwitchExpr.add("externalVar2");
+        expectOutVarNamesSwitchExpr.add("externalVar3");
+        Assert.assertEquals(expectOutVarNamesSwitchExpr, outVarNamesSwitchExpr);
     }
     
     @Test
-    public void getOutVarAttrs() {
+    public void getOutVarAttrsTest() {
         Express4Runner express4Runner = new Express4Runner(InitOptions.DEFAULT_OPTIONS);
         Assert.assertEquals(Arrays.asList("a.b.c", "a.b.d", "c.m"),
             flatOutVarAttrs(express4Runner.getOutVarAttrs("a.b.c+a.b.c-a.b.d*c.m")));
@@ -1227,6 +1237,11 @@ public class Express4RunnerTest {
                     + "  case 1:\n" + "    int localVar = 10;\n" + "    globalVar = localVar + e0.externalVar;\n"
                     + "    break;\n" + "  case 2:\n" + "    int y = e1.externalVar2 + 10;\n" + "    break;\n" + "}\n"
                     + "return globalVar;")));
+        
+        // switch expression
+        Assert.assertEquals(Arrays.asList("e0.prop1", "e1.prop2", "e2.prop3"),
+            flatOutVarAttrs(express4Runner.getOutVarAttrs("int x = 2;\n" + "result = switch (x) {\n"
+                + "  case 1 -> e0.prop1 + 10\n" + "  case 2 -> e1.prop2 * 2\n" + "  default -> e2.prop3\n" + "}")));
     }
     
     private List<String> flatOutVarAttrs(Set<List<String>> outVarAttrs) {
@@ -1727,5 +1742,22 @@ public class Express4RunnerTest {
             (Number)express4Runner.execute("薪资项目@A【a】+ 薪资项目@B（b）", context, QLOptions.DEFAULT_OPTIONS).getResult();
         
         assertEquals(101, result.intValue());
+    }
+    
+    @Test
+    public void testSwitchMixedSyntaxError() {
+        Express4Runner express4Runner = new Express4Runner(InitOptions.DEFAULT_OPTIONS);
+        String script = "x = 1\n" + "result = switch (x) {\n" + "    case 1: \"one\"\n" // traditional syntax
+            + "    case 2 -> \"two\"\n" // expression syntax - should cause error
+            + "    default -> \"other\"\n" + "}";
+        
+        try {
+            Map<String, Object> context = new HashMap<>();
+            express4Runner.execute(script, context, QLOptions.DEFAULT_OPTIONS);
+            fail("Should throw QLSyntaxException for mixed switch syntax");
+        }
+        catch (QLSyntaxException e) {
+            assertTrue(e.getMessage().contains("Cannot mix traditional switch syntax"));
+        }
     }
 }

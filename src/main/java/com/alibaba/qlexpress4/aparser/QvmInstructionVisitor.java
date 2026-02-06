@@ -619,6 +619,54 @@ public class QvmInstructionVisitor extends QLParserBaseVisitor<Void> {
     
     @Override
     public Void visitSwitchExpr(SwitchExprContext ctx) {
+        SwitchCaseGroupsContext groupsContext = ctx.switchCaseGroups();
+        if (groupsContext == null) {
+            // Empty switch, push null as result
+            Token switchKeyToken = ctx.SWITCH().getSymbol();
+            ErrorReporter switchErrorReporter = newReporterWithToken(switchKeyToken);
+            addInstruction(new ConstInstruction(switchErrorReporter, null, null));
+            return null;
+        }
+        
+        List<SwitchCaseGroupContext> groups = groupsContext.switchCaseGroup();
+        if (groups.isEmpty()) {
+            Token switchKeyToken = ctx.SWITCH().getSymbol();
+            ErrorReporter switchErrorReporter = newReporterWithToken(switchKeyToken);
+            addInstruction(new ConstInstruction(switchErrorReporter, null, null));
+            return null;
+        }
+        
+        // Check the type of first group to determine switch style
+        SwitchCaseGroupContext firstGroup = groups.get(0);
+        boolean isStatementStyle = firstGroup instanceof SwitchStatementGroupContext;
+        boolean isExpressionStyle = firstGroup instanceof SwitchExprGroupContext;
+        
+        // Validate that all groups have the same type
+        for (int i = 1; i < groups.size(); i++) {
+            SwitchCaseGroupContext group = groups.get(i);
+            boolean currentIsStatement = group instanceof SwitchStatementGroupContext;
+            boolean currentIsExpression = group instanceof SwitchExprGroupContext;
+            
+            if ((isStatementStyle && !currentIsStatement) || (isExpressionStyle && !currentIsExpression)) {
+                Token errorToken = group.getStart();
+                throw reportParseErr(errorToken,
+                    "SWITCH_STYLE_MISMATCH",
+                    "Cannot mix traditional switch syntax (case X:) with switch expression syntax (case X ->) in the same switch block");
+            }
+        }
+        
+        if (isStatementStyle) {
+            // Traditional switch statement
+            visitSwitchStatement(ctx);
+        }
+        else if (isExpressionStyle) {
+            // Switch expression
+            visitSwitchExpression(ctx);
+        }
+        return null;
+    }
+    
+    private void visitSwitchStatement(SwitchExprContext ctx) {
         // Evaluate switch expression once and store in temporary variable
         int switchCount = switchCount();
         String switchVarName = "@switch_" + switchCount;
@@ -633,15 +681,16 @@ public class QvmInstructionVisitor extends QLParserBaseVisitor<Void> {
         ctx.expression().accept(this);
         addInstruction(new DefineLocalInstruction(switchErrorReporter, switchVarName, Object.class));
         
-        SwitchBlockStatementGroupsContext switchBlockContext = ctx.switchBlockStatementGroups();
-        if (switchBlockContext == null) {
-            // Empty switch, push null as result
-            addInstruction(new ConstInstruction(switchErrorReporter, null, null));
-            addInstruction(new CloseScopeInstruction(switchErrorReporter, switchScopeName));
-            return null;
-        }
+        SwitchCaseGroupsContext groupsContext = ctx.switchCaseGroups();
+        List<SwitchCaseGroupContext> allGroups = groupsContext.switchCaseGroup();
         
-        List<SwitchBlockStatementGroupContext> groups = switchBlockContext.switchBlockStatementGroup();
+        // Filter to get only statement groups
+        List<SwitchStatementGroupContext> groups = new ArrayList<>();
+        for (SwitchCaseGroupContext group : allGroups) {
+            if (group instanceof SwitchStatementGroupContext) {
+                groups.add((SwitchStatementGroupContext)group);
+            }
+        }
         
         // Collect case bodies and metadata
         List<List<QLInstruction>> caseBodies = new ArrayList<>();
@@ -649,7 +698,7 @@ public class QvmInstructionVisitor extends QLParserBaseVisitor<Void> {
         int defaultIndex = -1;
         
         for (int i = 0; i < groups.size(); i++) {
-            SwitchBlockStatementGroupContext group = groups.get(i);
+            SwitchStatementGroupContext group = groups.get(i);
             SwitchLabelsContext labelsContext = group.switchLabels();
             List<SwitchLabelContext> labels = labelsContext.switchLabel();
             
@@ -774,7 +823,133 @@ public class QvmInstructionVisitor extends QLParserBaseVisitor<Void> {
         }
         
         addInstruction(new CloseScopeInstruction(switchErrorReporter, switchScopeName));
-        return null;
+    }
+    
+    private void visitSwitchExpression(SwitchExprContext ctx) {
+        // Evaluate switch expression once and store in temporary variable
+        int switchCount = switchCount();
+        String switchVarName = "@switch_expr_" + switchCount;
+        Token switchKeyToken = ctx.SWITCH().getSymbol();
+        ErrorReporter switchErrorReporter = newReporterWithToken(switchKeyToken);
+        
+        // Create scope for switch expression
+        String switchScopeName = generatorScope.getName() + SCOPE_SEPARATOR + "SWITCH_EXPR_" + switchCount;
+        addInstruction(new NewScopeInstruction(switchErrorReporter, switchScopeName));
+        
+        // Evaluate and store switch expression
+        ctx.expression().accept(this);
+        addInstruction(new DefineLocalInstruction(switchErrorReporter, switchVarName, Object.class));
+        
+        SwitchCaseGroupsContext groupsContext = ctx.switchCaseGroups();
+        List<SwitchCaseGroupContext> allGroups = groupsContext.switchCaseGroup();
+        
+        // Filter to get only expression groups
+        List<SwitchExprGroupContext> groups = new ArrayList<>();
+        for (SwitchCaseGroupContext group : allGroups) {
+            if (group instanceof SwitchExprGroupContext) {
+                groups.add((SwitchExprGroupContext)group);
+            }
+        }
+        
+        // Generate jump instructions for each case
+        List<JumpIfPopInstruction> caseJumps = new ArrayList<>();
+        int defaultIndex = -1;
+        
+        // First pass: generate comparisons and collect metadata
+        for (int i = 0; i < groups.size(); i++) {
+            SwitchExprGroupContext group = groups.get(i);
+            SwitchExpressionLabelContext label = group.switchExpressionLabel();
+            
+            if (label.CASE() != null) {
+                // Case with expression list
+                ExpressionListContext exprList = label.expressionList();
+                List<ExpressionContext> caseValues = exprList.expression();
+                
+                for (ExpressionContext caseValue : caseValues) {
+                    // Load switch value
+                    addInstruction(new LoadInstruction(switchErrorReporter, switchVarName, null));
+                    // Evaluate case expression
+                    caseValue.accept(this);
+                    // Compare for equality using == operator
+                    BinaryOperator equalsOp = operatorFactory.getBinaryOperator("==");
+                    addInstruction(new OperatorInstruction(switchErrorReporter, equalsOp, null));
+                    
+                    // If equal (result is true), jump to case body
+                    JumpIfPopInstruction jumpToCase = new JumpIfPopInstruction(switchErrorReporter, true, -1);
+                    pureAddInstruction(jumpToCase);
+                    caseJumps.add(jumpToCase);
+                }
+            }
+            else if (label.DEFAULT() != null) {
+                // Default case
+                defaultIndex = i;
+            }
+        }
+        
+        // No match, jump to default or error
+        JumpInstruction jumpToDefaultOrError = new JumpInstruction(switchErrorReporter, -1);
+        pureAddInstruction(jumpToDefaultOrError);
+        int jumpToDefaultStartPos = instructionList.size();
+        
+        // Second pass: generate case bodies
+        List<JumpInstruction> endJumps = new ArrayList<>();
+        int caseJumpIndex = 0;
+        
+        for (int i = 0; i < groups.size(); i++) {
+            SwitchExprGroupContext group = groups.get(i);
+            SwitchExpressionLabelContext label = group.switchExpressionLabel();
+            
+            // Set jump targets for this case
+            int caseStartPos = instructionList.size();
+            
+            if (label.CASE() != null) {
+                ExpressionListContext exprList = label.expressionList();
+                int numCaseValues = exprList.expression().size();
+                
+                for (int j = 0; j < numCaseValues; j++) {
+                    if (caseJumpIndex < caseJumps.size()) {
+                        int jumpInstrPos = instructionList.indexOf(caseJumps.get(caseJumpIndex));
+                        int jumpStart = jumpInstrPos + 1;
+                        caseJumps.get(caseJumpIndex).setPosition(caseStartPos - jumpStart);
+                        caseJumpIndex++;
+                    }
+                }
+            }
+            else if (label.DEFAULT() != null && i == defaultIndex) {
+                // Set default jump target
+                jumpToDefaultOrError.setPosition(caseStartPos - jumpToDefaultStartPos);
+            }
+            
+            // Evaluate result expression for this case
+            ExpressionContext resultExpr = group.expression();
+            resultExpr.accept(this);
+            
+            // Jump to end after evaluating result
+            JumpInstruction jumpToEnd = new JumpInstruction(switchErrorReporter, -1);
+            pureAddInstruction(jumpToEnd);
+            endJumps.add(jumpToEnd);
+        }
+        
+        // Set end position
+        int endPosition = instructionList.size();
+        
+        // Fix up all end jumps
+        for (JumpInstruction endJump : endJumps) {
+            int endJumpPos = instructionList.indexOf(endJump);
+            endJump.setPosition(endPosition - endJumpPos - 1);
+        }
+        
+        // If no default, jump to end with null (should not happen in well-formed switch expressions)
+        if (defaultIndex == -1) {
+            jumpToDefaultOrError.setPosition(endPosition - jumpToDefaultStartPos);
+            addInstruction(new ConstInstruction(switchErrorReporter, null, null));
+        }
+        
+        if (initOptions.isTraceExpression()) {
+            pureAddInstruction(new TracePeekInstruction(switchErrorReporter, switchKeyToken.getStartIndex()));
+        }
+        
+        addInstruction(new CloseScopeInstruction(switchErrorReporter, switchScopeName));
     }
     
     @Override

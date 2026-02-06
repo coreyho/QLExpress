@@ -867,7 +867,7 @@ include::./src/test/resources/testsuite/independent/doc/for.ql[]
 include::./src/test/resources/testsuite/independent/doc/for_each.ql[]
 ----
 
-==== switch 语句
+==== switch
 
 支持类似 Java/C 的 switch 语法：
 
@@ -875,6 +875,20 @@ include::./src/test/resources/testsuite/independent/doc/for_each.ql[]
 ----
 include::./src/test/resources/testsuite/independent/doc/switch.ql[]
 ----
+
+switch 也可以作为表达式使用时，此时必须使用 `->` 标记（上面的写法虽然语法不会报错，但是整体作为表达式的返回值为null）：
+
+[source,java]
+----
+include::./src/test/resources/testsuite/independent/switch/switch_expression_basic.ql[tag=switchExpression]
+----
+
+switch 表达式特点：
+
+* 使用 `->` 语法，每个 case 可以返回一个表达式的值
+* 支持多个 case 值用逗号分隔（如 `case 90, 100 ->`）
+* 不会 fall-through，执行完一个 case 后自动跳出
+* 可以作为表达式使用，赋值给变量或用于其他表达式中
 
 ==== try-catch
 

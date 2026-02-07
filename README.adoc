@@ -548,6 +548,22 @@ public class QLImportTester {
  ** `ImportManager.importPack("java.util.stream")`
  ** `ImportManager.importPack("java.util.function")`
  * `ImportManager.importInnerCls` 导入给定类路径里的所有内部类
+ * `ImportManager.importClsAlias` 为类指定别名，**特别适用于代码混淆场景**。该方法直接使用传入的 Class 对象，而不是通过类名加载，可以避免类名编译后被混淆
+
+[source,java,indent=0]
+----
+        InitOptions initOptions = InitOptions.builder()
+            .securityStrategy(QLSecurityStrategy.open())
+            .addDefaultImport(Arrays.asList(ImportManager.importClsAlias(Aa.class, "User"),
+                ImportManager.importClsAlias(Bb.class, "Order")))
+            .build();
+        Express4Runner express4Runner = new Express4Runner(initOptions);
+        
+        QLResult result = express4Runner
+            .execute("user = new User(); user.name = 'jack'; " + "order = new Order(); order.amount = 100; "
+                + "user.name + ':' + order.amount", Collections.emptyMap(), QLOptions.DEFAULT_OPTIONS);
+        assertEquals("jack:100", result.getResult());
+----
 
 === 自定义 ClassLoader
 

@@ -547,6 +547,22 @@ In addition to using `ImportManager.importCls` to import individual classes, the
  ** `ImportManager.importPack("java.util.stream")`
  ** `ImportManager.importPack("java.util.function")`
  * `ImportManager.importInnerCls` imports all inner classes in a given class path
+ * `ImportManager.importClsAlias` assigns an alias to a class, **particularly suitable for code obfuscation scenarios**. This method directly uses the passed Class object instead of loading by class name, which avoids class name obfuscation after compilation
+
+[source,java,indent=0]
+----
+        InitOptions initOptions = InitOptions.builder()
+            .securityStrategy(QLSecurityStrategy.open())
+            .addDefaultImport(Arrays.asList(ImportManager.importClsAlias(Aa.class, "User"),
+                ImportManager.importClsAlias(Bb.class, "Order")))
+            .build();
+        Express4Runner express4Runner = new Express4Runner(initOptions);
+        
+        QLResult result = express4Runner
+            .execute("user = new User(); user.name = 'jack'; " + "order = new Order(); order.amount = 100; "
+                + "user.name + ':' + order.amount", Collections.emptyMap(), QLOptions.DEFAULT_OPTIONS);
+        assertEquals("jack:100", result.getResult());
+----
 
 === Custom ClassLoader
 

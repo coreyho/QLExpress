@@ -3,9 +3,12 @@ package com.alibaba.qlexpress4.runtime.instruction;
 import com.alibaba.qlexpress4.QLOptions;
 import com.alibaba.qlexpress4.exception.ErrorReporter;
 import com.alibaba.qlexpress4.exception.QLErrorCodes;
+import com.alibaba.qlexpress4.runtime.IMethod;
 import com.alibaba.qlexpress4.runtime.Parameters;
 import com.alibaba.qlexpress4.runtime.QContext;
+import com.alibaba.qlexpress4.runtime.QLambda;
 import com.alibaba.qlexpress4.runtime.QResult;
+import com.alibaba.qlexpress4.runtime.ReflectLoader;
 import com.alibaba.qlexpress4.runtime.Value;
 import com.alibaba.qlexpress4.runtime.data.DataValue;
 import com.alibaba.qlexpress4.runtime.util.MethodInvokeUtils;
@@ -13,7 +16,9 @@ import com.alibaba.qlexpress4.utils.PrintlnUtils;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -55,43 +60,9 @@ public class SpreadMethodInvokeInstruction extends QLInstruction {
             type[i] = v.getType();
         }
         
-        if (traversable instanceof Iterable) {
-            Iterable<?> iterable = (Iterable<?>)traversable;
-            List<? super Object> result = new ArrayList<>();
-            for (Object item : iterable) {
-                if (item == null) {
-                    if (qlOptions.isAvoidNullPointer()) {
-                        result.add(null);
-                        continue;
-                    }
-                    throw errorReporter.report(new NullPointerException(),
-                        QLErrorCodes.NULL_METHOD_ACCESS.name(),
-                        QLErrorCodes.NULL_METHOD_ACCESS.getErrorMsg());
-                }
-                Value invokeRes = MethodInvokeUtils
-                    .findMethodAndInvoke(item, methodName, params, type, qContext.getReflectLoader(), errorReporter);
-                result.add(invokeRes.get());
-            }
-            qContext.push(new DataValue(result));
-        }
-        else if (traversable.getClass().isArray()) {
-            int arrLen = Array.getLength(traversable);
-            List<? super Object> result = new ArrayList<>();
-            for (int i = 0; i < arrLen; i++) {
-                Object item = Array.get(traversable, i);
-                if (item == null) {
-                    if (qlOptions.isAvoidNullPointer()) {
-                        result.add(null);
-                        continue;
-                    }
-                    throw errorReporter.report(new NullPointerException(),
-                        QLErrorCodes.NULL_METHOD_ACCESS.name(),
-                        QLErrorCodes.NULL_METHOD_ACCESS.getErrorMsg());
-                }
-                Value invokeRes = MethodInvokeUtils
-                    .findMethodAndInvoke(item, methodName, params, type, qContext.getReflectLoader(), errorReporter);
-                result.add(invokeRes.get());
-            }
+        if (isTraversable(traversable)) {
+            List<Object> result =
+                spreadMethodInvokeRecursive(traversable, params, type, qContext.getReflectLoader(), qlOptions);
             qContext.push(new DataValue(result));
         }
         else {
@@ -100,6 +71,71 @@ public class SpreadMethodInvokeInstruction extends QLInstruction {
                 traversable.getClass().getName());
         }
         return QResult.NEXT_INSTRUCTION;
+    }
+    
+    /**
+     * Check if an object is traversable (Iterable or Array)
+     */
+    private boolean isTraversable(Object obj) {
+        return obj instanceof Iterable || (obj != null && obj.getClass().isArray());
+    }
+    
+    /**
+     * Recursively flatten nested lists/arrays and invoke method on each element
+     */
+    private List<Object> spreadMethodInvokeRecursive(Object traversable, Object[] params, Class<?>[] type,
+        ReflectLoader reflectLoader, QLOptions qlOptions) {
+        List<Object> result = new ArrayList<>();
+        
+        if (traversable instanceof Iterable) {
+            Iterable<?> iterable = (Iterable<?>)traversable;
+            for (Object item : iterable) {
+                processItem(item, result, params, type, reflectLoader, qlOptions);
+            }
+        }
+        else if (traversable.getClass().isArray()) {
+            int arrLen = Array.getLength(traversable);
+            for (int i = 0; i < arrLen; i++) {
+                Object item = Array.get(traversable, i);
+                processItem(item, result, params, type, reflectLoader, qlOptions);
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Process a single item: handle null, invoke method, or recursively flatten if nested
+     */
+    private void processItem(Object item, List<Object> result, Object[] params, Class<?>[] type,
+        ReflectLoader reflectLoader, QLOptions qlOptions) {
+        if (item == null) {
+            if (qlOptions.isAvoidNullPointer()) {
+                result.add(null);
+                return;
+            }
+            throw errorReporter.report(new NullPointerException(),
+                QLErrorCodes.NULL_METHOD_ACCESS.name(),
+                QLErrorCodes.NULL_METHOD_ACCESS.getErrorMsg());
+        }
+        
+        if (!isTraversable(item)) {
+            // Leaf node - invoke method directly
+            Value invokeRes =
+                MethodInvokeUtils.findMethodAndInvoke(item, methodName, params, type, reflectLoader, errorReporter);
+            result.add(invokeRes.get());
+            return;
+        }
+        // If item itself is traversable, try to invoke method on it first
+        IMethod method = reflectLoader.loadMethod(item, methodName, type);
+        if (method != null) {
+            Value invokeRes = MethodInvokeUtils.invokeIMethod(item, methodName, method, params, errorReporter);
+            result.add(invokeRes.get());
+            return;
+        }
+        // Then recursively flatten and invoke on nested elements
+        List<Object> nestedResult = spreadMethodInvokeRecursive(item, params, type, reflectLoader, qlOptions);
+        result.addAll(nestedResult);
     }
     
     @Override

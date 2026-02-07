@@ -664,6 +664,13 @@ Through the `*.` operator, you can quickly process lists and mappings, such as t
 include::./src/test/resources/testsuite/independent/spread/list_spread.ql[tag=spreadExample]
 ----
 
+The `*.` operator also supports automatic flattening of multi-level nested lists. When a list contains nested lists, the `*.` operator will automatically and recursively flatten all levels until it finds elements with the specified property or method:
+
+[source,java]
+----
+include::./src/test/resources/testsuite/independent/spread/nested_list_spread.ql[tag=nestedSpreadExample]
+----
+
 In mappings, by specifying the fully qualified name of the type through the `@class` key, you can directly use JSON to create complex Java objects. For example, the following MyHome is a Java class with complex nested types:
 
 [source,java]

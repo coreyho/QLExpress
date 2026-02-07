@@ -1760,4 +1760,13 @@ public class Express4RunnerTest {
             assertTrue(e.getMessage().contains("Cannot mix traditional switch syntax"));
         }
     }
+    
+    @Test
+    public void listSpreadTest() {
+        Express4Runner express4Runner =
+            new Express4Runner(InitOptions.builder().securityStrategy(QLSecurityStrategy.open()).build());
+        QLResult qlResult =
+            express4Runner.execute("[[1,2],[],[3],[]]*.isEmpty()", Collections.emptyMap(), QLOptions.DEFAULT_OPTIONS);
+        Assert.assertEquals(Arrays.asList(false, true, false, true), qlResult.getResult());
+    }
 }

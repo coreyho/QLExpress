@@ -47,15 +47,19 @@ public class MethodInvokeUtils {
         }
         else {
             // method invoke
-            Object[] convertResult =
-                ParametersTypeConvertor.cast(params, method.getParameterTypes(), method.isVarArgs());
-            try {
-                Object value = MethodHandler.Access.accessMethodValue(method, bean, convertResult);
-                return new DataValue(value);
-            }
-            catch (Exception e) {
-                throw ReflectLoader.unwrapMethodInvokeEx(errorReporter, methodName, e);
-            }
+            return invokeIMethod(bean, methodName, method, params, errorReporter);
+        }
+    }
+    
+    public static Value invokeIMethod(Object bean, String methodName, IMethod method, Object[] params,
+        ErrorReporter errorReporter) {
+        Object[] convertResult = ParametersTypeConvertor.cast(params, method.getParameterTypes(), method.isVarArgs());
+        try {
+            Object value = MethodHandler.Access.accessMethodValue(method, bean, convertResult);
+            return new DataValue(value);
+        }
+        catch (Exception e) {
+            throw ReflectLoader.unwrapMethodInvokeEx(errorReporter, methodName, e);
         }
     }
     

@@ -20,6 +20,8 @@ import com.alibaba.qlexpress4.runtime.trace.ExpressionTrace;
 import com.alibaba.qlexpress4.runtime.trace.TracePointTree;
 import com.alibaba.qlexpress4.security.QLSecurityStrategy;
 import com.alibaba.qlexpress4.test.function.HelloFunction;
+import com.alibaba.qlexpress4.test.inport.alias.Aa;
+import com.alibaba.qlexpress4.test.inport.alias.Bb;
 import com.alibaba.qlexpress4.test.qlalias.Order;
 import com.alibaba.qlexpress4.test.qlalias.Patient;
 import com.alibaba.qlexpress4.test.qlalias.Person;
@@ -1768,5 +1770,65 @@ public class Express4RunnerTest {
         QLResult qlResult =
             express4Runner.execute("[[1,2],[],[3],[]]*.isEmpty()", Collections.emptyMap(), QLOptions.DEFAULT_OPTIONS);
         Assert.assertEquals(Arrays.asList(false, true, false, true), qlResult.getResult());
+    }
+    
+    @Test
+    public void importClsAliasTest() {
+        // Test basic class alias import
+        InitOptions initOptions = InitOptions.builder()
+            .securityStrategy(QLSecurityStrategy.open())
+            .addDefaultImport(Arrays.asList(ImportManager.importClsAlias(ArrayList.class, "MyList")))
+            .build();
+        Express4Runner express4Runner = new Express4Runner(initOptions);
+        
+        // Use alias to create instance
+        QLResult result = express4Runner.execute("list = new MyList(); list.add(1); list.add(2); list.size()",
+            Collections.emptyMap(),
+            QLOptions.DEFAULT_OPTIONS);
+        assertEquals(2, result.getResult());
+        
+        // Use alias to access static methods (if any)
+        result = express4Runner.execute("MyList.class.getName()", Collections.emptyMap(), QLOptions.DEFAULT_OPTIONS);
+        assertEquals("java.util.ArrayList", result.getResult());
+    }
+    
+    @Test
+    public void importClsAliasMultipleTest() {
+        // Test multiple class aliases
+        InitOptions initOptions = InitOptions.builder()
+            .securityStrategy(QLSecurityStrategy.open())
+            .addDefaultImport(Arrays.asList(ImportManager.importClsAlias(ArrayList.class, "MyList"),
+                ImportManager.importClsAlias(HashMap.class, "MyMap")))
+            .build();
+        Express4Runner express4Runner = new Express4Runner(initOptions);
+        
+        // Use both aliases
+        QLResult result =
+            express4Runner.execute("list = new MyList(); list.add('a'); " + "map = new MyMap(); map.put('key', list); "
+                + "map.get('key').get(0)", Collections.emptyMap(), QLOptions.DEFAULT_OPTIONS);
+        assertEquals("a", result.getResult());
+    }
+    
+    @Test
+    public void importClsAliasObfuscationTest() {
+        // tag::importClsAlias[]
+        InitOptions initOptions = InitOptions.builder()
+            .securityStrategy(QLSecurityStrategy.open())
+            .addDefaultImport(Arrays.asList(ImportManager.importClsAlias(Aa.class, "User"),
+                ImportManager.importClsAlias(Bb.class, "Order")))
+            .build();
+        Express4Runner express4Runner = new Express4Runner(initOptions);
+        
+        QLResult result = express4Runner
+            .execute("user = new User(); user.name = 'jack'; " + "order = new Order(); order.amount = 100; "
+                + "user.name + ':' + order.amount", Collections.emptyMap(), QLOptions.DEFAULT_OPTIONS);
+        assertEquals("jack:100", result.getResult());
+        // end::importClsAlias[]
+    }
+    
+    @Test(expected = IllegalArgumentException.class)
+    public void importClsAliasLowercaseAliasTest() {
+        // Should throw IllegalArgumentException when alias starts with lowercase
+        ImportManager.importClsAlias(ArrayList.class, "myList");
     }
 }

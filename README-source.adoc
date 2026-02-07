@@ -336,6 +336,12 @@ include::./src/test/java/com/alibaba/qlexpress4/Express4RunnerTest.java[tag=defa
  ** `ImportManager.importPack("java.util.stream")`
  ** `ImportManager.importPack("java.util.function")`
  * `ImportManager.importInnerCls` 导入给定类路径里的所有内部类
+ * `ImportManager.importClsAlias` 为类指定别名，**特别适用于代码混淆场景**。该方法直接使用传入的 Class 对象，而不是通过类名加载，可以避免类名编译后被混淆
+
+[source,java,indent=0]
+----
+include::./src/test/java/com/alibaba/qlexpress4/Express4RunnerTest.java[tag=importClsAlias]
+----
 
 === 自定义 ClassLoader
 

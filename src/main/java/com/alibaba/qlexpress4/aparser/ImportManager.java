@@ -46,6 +46,9 @@ public class ImportManager {
                 String[] split = anImport.getTarget().split("\\.");
                 importedClses.put(split[split.length - 1], importCls);
                 return true;
+            case ALIAS:
+                importedClses.put(anImport.getAlias(), anImport.getCls());
+                return true;
             default:
                 return false;
         }
@@ -189,13 +192,15 @@ public class ImportManager {
         }
     }
     
-    enum ImportScope {
+    public enum ImportScope {
         // import java.lang.*;
         PACK,
         // import a.b.Cls.*
         InnerCls,
         // import java.lang.String;
-        CLS
+        CLS,
+        // for Code Obfuscation Use Cases
+        ALIAS
     }
     
     public static QLImport importInnerCls(String clsPath) {
@@ -210,14 +215,38 @@ public class ImportManager {
         return new QLImport(ImportScope.CLS, clsPath);
     }
     
+    public static QLImport importClsAlias(Class<?> cls, String alias) {
+        if (cls == null) {
+            throw new IllegalArgumentException("Class cannot be null");
+        }
+        if (alias == null || alias.isEmpty()) {
+            throw new IllegalArgumentException("Alias cannot be null or empty");
+        }
+        if (!Character.isUpperCase(alias.charAt(0))) {
+            throw new IllegalArgumentException("Alias must start with an uppercase letter: " + alias);
+        }
+        return new QLImport(cls, alias);
+    }
+    
     public static class QLImport {
         private final ImportScope scope;
         
-        private final String target;
+        private String target;
+        
+        private Class<?> cls;
+        
+        private String alias;
         
         public QLImport(ImportScope scope, String target) {
             this.scope = scope;
             this.target = target;
+            this.cls = null;
+        }
+        
+        public QLImport(Class<?> cls, String alias) {
+            this.scope = ImportScope.ALIAS;
+            this.cls = cls;
+            this.alias = alias;
         }
         
         public ImportScope getScope() {
@@ -226,6 +255,14 @@ public class ImportManager {
         
         public String getTarget() {
             return target;
+        }
+        
+        public Class<?> getCls() {
+            return cls;
+        }
+        
+        public String getAlias() {
+            return alias;
         }
     }
 }

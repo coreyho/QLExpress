@@ -335,6 +335,12 @@ In addition to using `ImportManager.importCls` to import individual classes, the
  ** `ImportManager.importPack("java.util.stream")`
  ** `ImportManager.importPack("java.util.function")`
  * `ImportManager.importInnerCls` imports all inner classes in a given class path
+ * `ImportManager.importClsAlias` assigns an alias to a class, **particularly suitable for code obfuscation scenarios**. This method directly uses the passed Class object instead of loading by class name, which avoids class name obfuscation after compilation
+
+[source,java,indent=0]
+----
+include::./src/test/java/com/alibaba/qlexpress4/Express4RunnerTest.java[tag=importClsAlias]
+----
 
 === Custom ClassLoader
 
